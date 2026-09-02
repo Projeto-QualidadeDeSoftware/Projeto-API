@@ -1,7 +1,7 @@
-# sistema-vendas-api
+# sistema-compras-vendas-api
 API REST desenvolvida com Spring Boot para gerenciamento de vendas.
 
-# Sistema de Gerenciamento de Vendas API
+# Sistema de Gerenciamento de Compras e Vendas API
 
 ## Descrição do Projeto
 Este projeto consiste em uma API REST desenvolvida em Java utilizando Spring Boot para gerenciamento de um sistema de vendas.
