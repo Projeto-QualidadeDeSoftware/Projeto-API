@@ -10,11 +10,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.silva.projeto.model.dto.VendaDTO;
-import com.silva.projeto.model.entity.Venda;
+import com.silva.projeto.model.dto.VendaRequest;
 import com.silva.projeto.service.VendaService;
 
 @RestController
@@ -28,44 +27,29 @@ public class VendaController {
     }
 
     @GetMapping
-    public List<Venda> listar() {
-        return vendaService.listarTodos();
+    public List<VendaDTO> listar() {
+        return vendaService.listarTodos()
+                .stream()
+                .map(vendaService::converterParaDTO)
+                .toList();
     }
 
     @GetMapping("/{id}")
     public VendaDTO buscarPorId(@PathVariable Long id) {
-        Venda venda = vendaService.buscarPorId(id);
-        return vendaService.converterParaDTO(venda);
+        return vendaService.converterParaDTO(vendaService.buscarPorId(id));
     }
 
     @PostMapping
-    public Venda salvar(
-            @RequestBody @Valid Venda venda,
-            @RequestParam Long clienteId,
-            @RequestParam Long funcionarioId,
-            @RequestParam List<Long> produtosIds) {
-
-        return vendaService.salvar(
-                venda,
-                clienteId,
-                funcionarioId,
-                produtosIds);
+    public VendaDTO salvar(@RequestBody @Valid VendaRequest dados) {
+        return vendaService.converterParaDTO(vendaService.salvar(dados));
     }
-    
-    @PutMapping("/{id}")
-    public Venda atualizar(
-            @PathVariable Long id,
-            @RequestBody @Valid Venda venda,
-            @RequestParam Long clienteId,
-            @RequestParam Long funcionarioId,
-            @RequestParam List<Long> produtosIds) {
 
-        return vendaService.atualizar(
-                id,
-                venda,
-                clienteId,
-                funcionarioId,
-                produtosIds);
+    @PutMapping("/{id}")
+    public VendaDTO atualizar(
+            @PathVariable Long id,
+            @RequestBody @Valid VendaRequest dados) {
+
+        return vendaService.converterParaDTO(vendaService.atualizar(id, dados));
     }
 
     @DeleteMapping("/{id}")
