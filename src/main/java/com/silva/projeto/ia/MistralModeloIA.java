@@ -4,6 +4,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -19,6 +21,8 @@ import com.silva.projeto.exception.AssistenteIndisponivelException;
 /** Implementação do {@link ModeloIA} usando a API de chat da Mistral. */
 @Component
 public class MistralModeloIA implements ModeloIA {
+
+    private static final Logger log = LoggerFactory.getLogger(MistralModeloIA.class);
 
     private final RestClient cliente;
     private final String apiKey;
@@ -81,6 +85,7 @@ public class MistralModeloIA implements ModeloIA {
                     .body(RespostaChat.class);
         } catch (RestClientException erro) {
             // Inclui limite do plano gratuito (HTTP 429), chave inválida e falha de rede.
+            log.warn("Falha ao chamar a Mistral (modelo {}): {}", modelo, erro.getMessage());
             throw new AssistenteIndisponivelException(
                     "Assistente de IA indisponível no momento, tente novamente em instantes", erro);
         }
