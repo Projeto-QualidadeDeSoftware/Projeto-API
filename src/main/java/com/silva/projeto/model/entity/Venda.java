@@ -6,14 +6,14 @@ import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -42,14 +42,9 @@ public class Venda {
     @JsonIgnoreProperties("vendas")
     private Funcionario funcionario;
 
-    @ManyToMany
-    @JoinTable(
-        name = "venda_produto",
-        joinColumns = @JoinColumn(name = "venda_id"),
-        inverseJoinColumns = @JoinColumn(name = "produto_id")
-    )
-    @NotEmpty(message = "A venda deve possuir pelo menos um produto")
-    private List<Produto> produtos = new ArrayList<>();
+    @OneToMany(mappedBy = "venda", cascade = CascadeType.ALL, orphanRemoval = true)
+    @NotEmpty(message = "A venda deve possuir pelo menos um item")
+    private List<ItemVenda> itens = new ArrayList<>();
 
     public Venda() {
     }
@@ -79,8 +74,8 @@ public class Venda {
         return funcionario;
     }
 
-    public List<Produto> getProdutos() {
-        return produtos;
+    public List<ItemVenda> getItens() {
+        return itens;
     }
 
     public void setId(Long id) {
@@ -103,7 +98,7 @@ public class Venda {
         this.funcionario = funcionario;
     }
 
-    public void setProdutos(List<Produto> produtos) {
-        this.produtos = produtos;
+    public void setItens(List<ItemVenda> itens) {
+        this.itens = itens;
     }
 }

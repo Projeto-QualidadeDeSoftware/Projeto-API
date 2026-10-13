@@ -11,7 +11,7 @@ public class VendaDTO {
 
     private ClienteDTO cliente;
     private FuncionarioDTO funcionario;
-    private List<ProdutoDTO> produtos;
+    private List<ItemVendaDTO> itens;
 
     public VendaDTO(
             Long id,
@@ -19,14 +19,14 @@ public class VendaDTO {
             Double valorTotal,
             ClienteDTO cliente,
             FuncionarioDTO funcionario,
-            List<ProdutoDTO> produtos) {
+            List<ItemVendaDTO> itens) {
 
         this.id = id;
         this.dataVenda = dataVenda;
         this.valorTotal = valorTotal;
         this.cliente = cliente;
         this.funcionario = funcionario;
-        this.produtos = produtos;
+        this.itens = itens;
     }
 
     public Long getId() {
@@ -49,7 +49,7 @@ public class VendaDTO {
         return funcionario;
     }
 
-    public List<ProdutoDTO> getProdutos() {
-        return produtos;
+    public List<ItemVendaDTO> getItens() {
+        return itens;
     }
 }

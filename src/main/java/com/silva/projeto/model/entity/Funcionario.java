@@ -1,5 +1,6 @@
 package com.silva.projeto.model.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -9,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.persistence.OneToMany;
 
@@ -28,6 +30,7 @@ public class Funcionario {
     public String nome;
 
     @NotBlank(message = "CPF é obrigatório")
+    @Column(unique = true)
     public String cpf;
 
     @NotBlank(message = "Cargo é obrigatório")
@@ -35,6 +38,7 @@ public class Funcionario {
 
     @NotBlank(message = "Senha é obrigatória")
     @Size(min = 4, message = "Senha deve ter no mínimo 4 caracteres")
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     public String senha;
 
     @Positive(message = "Salário deve ser maior que zero")

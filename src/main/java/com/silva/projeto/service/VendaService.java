@@ -1,11 +1,16 @@
 package com.silva.projeto.service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.silva.projeto.exception.ConflitoException;
 import com.silva.projeto.model.entity.Cliente;
 import com.silva.projeto.model.entity.Funcionario;
+import com.silva.projeto.model.entity.ItemVenda;
 import com.silva.projeto.model.entity.Produto;
 import com.silva.projeto.model.entity.Venda;
 import com.silva.projeto.repository.ClienteRepository;
@@ -14,8 +19,10 @@ import com.silva.projeto.repository.ProdutoRepository;
 import com.silva.projeto.repository.VendaRepository;
 import com.silva.projeto.model.dto.ClienteDTO;
 import com.silva.projeto.model.dto.FuncionarioDTO;
-import com.silva.projeto.model.dto.ProdutoDTO;
+import com.silva.projeto.model.dto.ItemVendaDTO;
+import com.silva.projeto.model.dto.ItemVendaRequest;
 import com.silva.projeto.model.dto.VendaDTO;
+import com.silva.projeto.model.dto.VendaRequest;
 
 @Service
 public class VendaService {
@@ -46,29 +53,106 @@ public class VendaService {
                 .orElseThrow(() -> new RuntimeException("Venda não encontrada"));
     }
 
-    public Venda salvar(Venda venda, Long clienteId, Long funcionarioId, List<Long> produtosIds) {
+    @Transactional
+    public Venda salvar(VendaRequest dados) {
 
-        Cliente cliente = clienteRepository.findById(clienteId)
-                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
+        Venda venda = new Venda();
 
-        Funcionario funcionario = funcionarioRepository.findById(funcionarioId)
-                .orElseThrow(() -> new RuntimeException("Funcionário não encontrado"));
-
-        List<Produto> produtos = produtoRepository.findAllById(produtosIds);
-
-        venda.setCliente(cliente);
-        venda.setFuncionario(funcionario);
-        venda.setProdutos(produtos);
-
-        double total = produtos.stream()
-                .mapToDouble(Produto::getPreco)
-                .sum();
-
-        venda.setValorTotal(total);
+        preencher(venda, dados);
 
         return vendaRepository.save(venda);
     }
-    
+
+    @Transactional
+    public Venda atualizar(Long id, VendaRequest dados) {
+
+        Venda venda = buscarPorId(id);
+
+        devolverEstoque(venda);
+        venda.getItens().clear();
+
+        preencher(venda, dados);
+
+        return vendaRepository.save(venda);
+    }
+
+    /** Excluir uma venda equivale a cancelá-la: os produtos voltam para o estoque. */
+    @Transactional
+    public void deletar(Long id) {
+
+        Venda venda = buscarPorId(id);
+
+        devolverEstoque(venda);
+
+        vendaRepository.delete(venda);
+    }
+
+    /**
+     * Monta a venda a partir do pedido, dando baixa no estoque de cada produto.
+     * Se faltar estoque de qualquer item, nada é gravado (a transação é desfeita).
+     */
+    private void preencher(Venda venda, VendaRequest dados) {
+
+        Cliente cliente = clienteRepository.findById(dados.clienteId())
+                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
+
+        Funcionario funcionario = funcionarioRepository.findById(dados.funcionarioId())
+                .orElseThrow(() -> new RuntimeException("Funcionário não encontrado"));
+
+        venda.setDataVenda(dados.dataVenda());
+        venda.setCliente(cliente);
+        venda.setFuncionario(funcionario);
+
+        // O mesmo produto enviado em duas linhas vira um item só.
+        Map<Long, Integer> quantidadePorProduto = new LinkedHashMap<>();
+
+        for (ItemVendaRequest item : dados.itens()) {
+            quantidadePorProduto.merge(item.produtoId(), item.quantidade(), Integer::sum);
+        }
+
+        double total = 0;
+
+        for (Map.Entry<Long, Integer> entrada : quantidadePorProduto.entrySet()) {
+
+            Long produtoId = entrada.getKey();
+            int quantidade = entrada.getValue();
+
+            Produto produto = produtoRepository.findById(produtoId)
+                    .orElseThrow(() -> new RuntimeException(
+                            "Produto não encontrado: id " + produtoId));
+
+            int estoque = produto.getEstoque() == null ? 0 : produto.getEstoque();
+
+            if (quantidade > estoque) {
+                throw new ConflitoException(
+                        "Estoque insuficiente para " + produto.getNome()
+                        + ": disponível " + estoque
+                        + ", solicitado " + quantidade);
+            }
+
+            produto.setEstoque(estoque - quantidade);
+
+            double subtotal = produto.getPreco() * quantidade;
+
+            venda.getItens().add(new ItemVenda(quantidade, subtotal, produto, venda));
+
+            total += subtotal;
+        }
+
+        venda.setValorTotal(total);
+    }
+
+    private void devolverEstoque(Venda venda) {
+
+        for (ItemVenda item : venda.getItens()) {
+
+            Produto produto = item.getProduto();
+            int estoque = produto.getEstoque() == null ? 0 : produto.getEstoque();
+
+            produto.setEstoque(estoque + item.getQuantidade());
+        }
+    }
+
     public VendaDTO converterParaDTO(Venda venda) {
 
         ClienteDTO clienteDTO = new ClienteDTO(
@@ -87,13 +171,13 @@ public class VendaService {
                 venda.getFuncionario().getSalario()
         );
 
-        List<ProdutoDTO> produtosDTO = venda.getProdutos()
+        List<ItemVendaDTO> itensDTO = venda.getItens()
                 .stream()
-                .map(produto -> new ProdutoDTO(
-                        produto.getId(),
-                        produto.getNome(),
-                        produto.getPreco(),
-                        produto.getEstoque()
+                .map(item -> new ItemVendaDTO(
+                        item.getProduto().getId(),
+                        item.getProduto().getNome(),
+                        item.getQuantidade(),
+                        item.getSubtotal()
                 ))
                 .toList();
 
@@ -103,42 +187,7 @@ public class VendaService {
                 venda.getValorTotal(),
                 clienteDTO,
                 funcionarioDTO,
-                produtosDTO
+                itensDTO
         );
-    }
-    
-    public Venda atualizar(
-            Long id,
-            Venda vendaAtualizada,
-            Long clienteId,
-            Long funcionarioId,
-            List<Long> produtosIds) {
-
-        Venda venda = buscarPorId(id);
-
-        Cliente cliente = clienteRepository.findById(clienteId)
-                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
-
-        Funcionario funcionario = funcionarioRepository.findById(funcionarioId)
-                .orElseThrow(() -> new RuntimeException("Funcionário não encontrado"));
-
-        List<Produto> produtos = produtoRepository.findAllById(produtosIds);
-
-        venda.setDataVenda(vendaAtualizada.getDataVenda());
-        venda.setCliente(cliente);
-        venda.setFuncionario(funcionario);
-        venda.setProdutos(produtos);
-
-        double total = produtos.stream()
-                .mapToDouble(Produto::getPreco)
-                .sum();
-
-        venda.setValorTotal(total);
-
-        return vendaRepository.save(venda);
-    }
-
-    public void deletar(Long id) {
-        vendaRepository.deleteById(id);
     }
 }
