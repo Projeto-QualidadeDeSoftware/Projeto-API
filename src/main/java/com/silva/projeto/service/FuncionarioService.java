@@ -2,8 +2,10 @@ package com.silva.projeto.service;
 
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.silva.projeto.exception.ConflitoException;
 import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.repository.FuncionarioRepository;
 import com.silva.projeto.model.dto.FuncionarioDTO;
@@ -12,9 +14,14 @@ import com.silva.projeto.model.dto.FuncionarioDTO;
 public class FuncionarioService {
 
     private final FuncionarioRepository repository;
+    private final PasswordEncoder passwordEncoder;
 
-    public FuncionarioService(FuncionarioRepository repository) {
+    public FuncionarioService(
+            FuncionarioRepository repository,
+            PasswordEncoder passwordEncoder) {
+
         this.repository = repository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     public List<Funcionario> listarTodos() {
@@ -27,6 +34,14 @@ public class FuncionarioService {
     }
 
     public Funcionario salvar(Funcionario funcionario) {
+
+        // O CPF é o login, então não pode se repetir.
+        if (repository.findFirstByCpf(funcionario.getCpf()).isPresent()) {
+            throw new ConflitoException("Já existe um funcionário com este CPF");
+        }
+
+        funcionario.setSenha(passwordEncoder.encode(funcionario.getSenha()));
+
         return repository.save(funcionario);
     }
 
@@ -34,10 +49,16 @@ public class FuncionarioService {
 
         Funcionario funcionario = buscarPorId(id);
 
+        repository.findFirstByCpf(funcionarioAtualizado.getCpf())
+                .filter(outro -> !outro.getId().equals(id))
+                .ifPresent(outro -> {
+                    throw new ConflitoException("Já existe um funcionário com este CPF");
+                });
+
         funcionario.setNome(funcionarioAtualizado.getNome());
         funcionario.setCpf(funcionarioAtualizado.getCpf());
         funcionario.setCargo(funcionarioAtualizado.getCargo());
-        funcionario.setSenha(funcionarioAtualizado.getSenha());
+        funcionario.setSenha(passwordEncoder.encode(funcionarioAtualizado.getSenha()));
         funcionario.setSalario(funcionarioAtualizado.getSalario());
 
         return repository.save(funcionario);

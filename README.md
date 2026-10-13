@@ -23,6 +23,10 @@ O sistema permite:
 * Hibernate
 * MySQL
 * Bean Validation
+* Spring Security (login com token JWT)
+* Mistral AI (assistente de estoque)
+* JUnit 5, Mockito e JaCoCo (testes automatizados)
+* GitHub Actions (CI/CD)
 * Maven
 
 # Estrutura do Projeto
@@ -53,14 +57,112 @@ spring.jpa.hibernate.ddl-auto=update
 
 ## 4. Executar o projeto
 
+Ao iniciar com o banco vazio, a API cria um usuário inicial para o primeiro login:
+CPF `00000000000`, senha `admin123` (somente em desenvolvimento; em stage e produção
+esses valores vêm de variáveis de ambiente).
+
+## 5. Variáveis de ambiente
+
+| Variável | Para que serve | Padrão em desenvolvimento |
+| --- | --- | --- |
+| `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Conexão com o MySQL | `localhost:3306/projeto`, `root`, sem senha |
+| `JWT_SECRET` | Chave que assina os tokens de login (mínimo 32 caracteres) | chave de desenvolvimento |
+| `JWT_EXPIRACAO_MINUTOS` | Validade do token | `480` (8 horas) |
+| `ADMIN_CPF`, `ADMIN_SENHA` | Usuário criado quando não existe nenhum funcionário | `00000000000` / `admin123` |
+| `CORS_ORIGENS` | Endereços do front web autorizados, separados por vírgula | `localhost:5173`, `:3000` e `:8081` |
+| `MISTRAL_API_KEY` | Chave da Mistral para o assistente de IA | vazio (assistente responde 503) |
+| `MISTRAL_MODELO` | Modelo usado | `mistral-small-latest` |
+| `SPRING_PROFILES_ACTIVE` | `stage` ou `prod` nos ambientes publicados | sem perfil |
+
+Com o perfil `stage` ou `prod`, `JWT_SECRET`, `ADMIN_CPF`, `ADMIN_SENHA` e `CORS_ORIGENS`
+são obrigatórias: se faltar alguma, a aplicação não inicia.
+
+# Testes Automatizados
+
+```
+./mvnw verify
+```
+
+Executa os testes unitários (JUnit 5 + Mockito) e os testes de integração da API
+(MockMvc com banco H2 em memória, sem precisar de MySQL nem da Mistral), gera o
+relatório de cobertura em `target/site/jacoco/index.html` e falha se a cobertura
+de linhas ficar abaixo de 60%.
+
+# CI/CD
+
+- **CI** (`.github/workflows/ci.yml`): em todo push e pull request para `main` e `develop`, roda `./mvnw verify`.
+- **CD** (`.github/workflows/cd.yml`): a cada alteração na `main`, gera a imagem Docker, publica em
+  **stage** automaticamente e publica em **produção** somente depois que um integrante do grupo aprovar.
+
 # Funcionalidades
 - CRUD completo de Clientes
 - CRUD completo de Funcionários
 - CRUD completo de Produtos
-- CRUD completo de Vendas
+- CRUD completo de Vendas, com quantidade por produto e baixa automática de estoque
+- Login com CPF e senha; nenhuma rota funciona sem estar logado
+- Assistente de IA que responde perguntas sobre o estoque
 - Validações utilizando Bean Validation
 
 # Endpoints da API
+
+Todas as rotas exigem login, exceto `POST /auth/login` e `GET /actuator/health`.
+Sem token válido a resposta é `401`.
+
+# Autenticação
+
+## Login
+
+```
+POST /auth/login
+```
+
+```json
+{
+  "cpf": "00000000000",
+  "senha": "admin123"
+}
+```
+
+Resposta:
+
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9...",
+  "tipo": "Bearer",
+  "expiraEm": "2026-10-11T23:30:00Z",
+  "funcionario": { "id": 1, "nome": "Administrador", "cargo": "Administrador" }
+}
+```
+
+O token deve ser enviado em todas as outras requisições, no cabeçalho:
+
+```
+Authorization: Bearer <token>
+```
+
+Quando o token expira a API volta a responder `401` e é preciso fazer login de novo.
+
+## Usuário logado
+
+```
+GET /auth/me
+```
+
+Devolve `id`, `nome` e `cargo` do funcionário dono do token.
+
+## Formato dos erros
+
+```json
+{ "status": 401, "mensagem": "CPF ou senha inválidos", "dataHora": "2026-10-11T13:30:00" }
+```
+
+| Status | Quando |
+| --- | --- |
+| 400 | Dados inválidos |
+| 401 | Sem login, token inválido/expirado ou CPF/senha errados |
+| 404 | Registro não encontrado |
+| 409 | Estoque insuficiente ou CPF de funcionário já cadastrado |
+| 503 | Assistente de IA indisponível |
 
 # Cliente
 ## Criar Cliente
@@ -113,6 +215,9 @@ POST /funcionario
   "salario": 2500.00
 }
 ```
+
+O CPF é o login do funcionário e não pode se repetir. A senha é gravada como hash
+e nunca é devolvida nas respostas.
 
 ## Listar Funcionários
 ```
@@ -174,16 +279,39 @@ DELETE /produto/1
 
 ## Criar Venda
 ```
-POST /venda?clienteId=1&funcionarioId=1&produtosIds=1,2
+POST /venda
 ```
 
-```
+```json
 {
-  "dataVenda": "2026-05-13"
+  "dataVenda": "2026-05-13",
+  "clienteId": 1,
+  "funcionarioId": 1,
+  "itens": [
+    { "produtoId": 1, "quantidade": 2 },
+    { "produtoId": 2, "quantidade": 1 }
+  ]
 }
 ```
 
-O valor total da venda é calculado automaticamente com base nos produtos informados.
+O valor total é calculado automaticamente e a quantidade vendida sai do estoque de cada produto.
+Se não houver estoque suficiente de algum item, a venda inteira é recusada com `409`.
+
+Resposta:
+
+```json
+{
+  "id": 1,
+  "dataVenda": "2026-05-13",
+  "valorTotal": 7080.0,
+  "cliente": { "id": 1, "nome": "Maria", "cpf": "11111111111", "email": "maria@email.com", "telefone": "18999999999" },
+  "funcionario": { "id": 1, "nome": "Carlos", "cpf": "98765432100", "cargo": "Vendedor", "salario": 2500.0 },
+  "itens": [
+    { "produtoId": 1, "produto": "Notebook", "quantidade": 2, "subtotal": 7000.0 },
+    { "produtoId": 2, "produto": "Mouse", "quantidade": 1, "subtotal": 80.0 }
+  ]
+}
+```
 
 ## Listar Vendas
 ```
@@ -197,13 +325,41 @@ GET /venda/1
 
 ## Atualizar Venda
 ```
-PUT /venda/1?clienteId=1&funcionarioId=1&produtosIds=2,3
+PUT /venda/1
 ```
+
+Mesmo corpo da criação. O estoque da venda antiga é devolvido antes de dar baixa nos novos itens.
 
 ## Deletar Venda
 ```
 DELETE /venda/1
 ```
+
+Os produtos da venda excluída voltam para o estoque.
+
+# Assistente de IA
+
+```
+POST /assistente/pergunta
+```
+
+```json
+{
+  "pergunta": "Quais produtos estão com menos de 5 unidades?"
+}
+```
+
+Resposta:
+
+```json
+{
+  "resposta": "Mouse (2 unidades) e Teclado (4 unidades)."
+}
+```
+
+A cada pergunta a API lê os produtos do banco e envia esses dados junto com a pergunta para a
+Mistral, então a resposta reflete o estoque do momento. A pergunta aceita até 500 caracteres.
+Sem `MISTRAL_API_KEY`, ou se a Mistral estiver fora do ar ou no limite do plano gratuito, a resposta é `503`.
 
 # Validações
 O projeto utiliza Bean Validation para validar os dados recebidos pela API.
