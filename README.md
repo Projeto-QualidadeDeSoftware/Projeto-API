@@ -1,4 +1,4 @@
-# sistema-vendas-api
+ministral-8b-2512# sistema-vendas-api
 API REST desenvolvida com Spring Boot para gerenciamento de vendas.
 
 # Sistema de Gerenciamento de Vendas API
@@ -71,7 +71,7 @@ esses valores vêm de variáveis de ambiente).
 | `ADMIN_CPF`, `ADMIN_SENHA` | Usuário criado quando não existe nenhum funcionário | `00000000000` / `admin123` |
 | `CORS_ORIGENS` | Endereços do front web autorizados, separados por vírgula | `localhost:5173`, `:3000` e `:8081` |
 | `MISTRAL_API_KEY` | Chave da Mistral para o assistente de IA | vazio (assistente responde 503) |
-| `MISTRAL_MODELO` | Modelo usado | `mistral-small-latest` |
+| `MISTRAL_MODELO` | Modelo usado | `ministral-8b-2512` |
 | `SPRING_PROFILES_ACTIVE` | `stage` ou `prod` nos ambientes publicados | sem perfil |
 
 Com o perfil `stage` ou `prod`, `JWT_SECRET`, `ADMIN_CPF`, `ADMIN_SENHA` e `CORS_ORIGENS`
