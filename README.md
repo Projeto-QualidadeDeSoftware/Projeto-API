@@ -1,4 +1,4 @@
-ministral-8b-2512# sistema-vendas-api
+# sistema-vendas-api
 API REST desenvolvida com Spring Boot para gerenciamento de vendas.
 
 # Sistema de Gerenciamento de Vendas API
@@ -27,6 +27,10 @@ O sistema permite:
 * Mistral AI (assistente de estoque)
 * JUnit 5, Mockito e JaCoCo (testes automatizados)
 * GitHub Actions (CI/CD)
+* Springdoc OpenAPI (Swagger)
+* Docker, Docker Compose e Caddy (HTTPS)
+* MariaDB com plugin de auditoria
+* Prometheus e Grafana (monitoramento)
 * Maven
 
 # Estrutura do Projeto
@@ -58,7 +62,7 @@ spring.jpa.hibernate.ddl-auto=update
 ## 4. Executar o projeto
 
 Ao iniciar com o banco vazio, a API cria um usuário inicial para o primeiro login:
-CPF `00000000000`, senha `admin123` (somente em desenvolvimento; em stage e produção
+CPF `00000000000`, senha `admin123` (somente em desenvolvimento; em homologação e produção
 esses valores vêm de variáveis de ambiente).
 
 ## 5. Variáveis de ambiente
@@ -72,10 +76,42 @@ esses valores vêm de variáveis de ambiente).
 | `CORS_ORIGENS` | Endereços do front web autorizados, separados por vírgula | `localhost:5173`, `:3000` e `:8081` |
 | `MISTRAL_API_KEY` | Chave da Mistral para o assistente de IA | vazio (assistente responde 503) |
 | `MISTRAL_MODELO` | Modelo usado | `ministral-8b-2512` |
-| `SPRING_PROFILES_ACTIVE` | `stage` ou `prod` nos ambientes publicados | sem perfil |
+| `LOG_ARQUIVO` | Arquivo de log | `logs/projeto.log` |
+| `SPRING_PROFILES_ACTIVE` | `homologacao` ou `producao` nos ambientes publicados | sem perfil |
 
-Com o perfil `stage` ou `prod`, `JWT_SECRET`, `ADMIN_CPF`, `ADMIN_SENHA` e `CORS_ORIGENS`
+Com o perfil `homologacao` ou `producao`, `JWT_SECRET`, `ADMIN_CPF`, `ADMIN_SENHA` e `CORS_ORIGENS`
 são obrigatórias: se faltar alguma, a aplicação não inicia.
+
+# Documentação da API (Swagger)
+
+Com a API rodando, a documentação interativa fica em:
+
+- `http://localhost:8080/swagger-ui.html` (tela)
+- `http://localhost:8080/v3/api-docs` (especificação OpenAPI em JSON)
+
+Para testar as rotas pela tela: execute `POST /auth/login`, copie o `token` da resposta,
+clique em **Authorize** e cole o token.
+
+# Auditoria e Logs
+
+- **Auditoria da aplicação:** toda operação que altera dados (inclusão, alteração, exclusão,
+  login, login recusado e pergunta à IA) é gravada na tabela `auditoria` com data e hora,
+  funcionário, ação, rota, status da resposta, IP e duração. Consultas (`GET`) não são gravadas.
+  A senha nunca é registrada e o CPF de logins recusados aparece mascarado (`123.***.***-01`).
+  Consulta: `GET /auditoria?pagina=0&tamanho=50`, somente para o cargo `Administrador`.
+- **Logs da aplicação:** além do console, ficam em `logs/projeto.log`, com rotação a cada 10 MB
+  e 30 arquivos guardados. Cada requisição gera uma linha de acesso
+  (`POST /produto 200 35ms funcionario=1 ip=...`) e os logins recusados geram um aviso.
+- **Auditoria do banco:** na VPS o MariaDB usa o plugin `server_audit`, que registra conexões
+  e todos os comandos que alteram estrutura, dados ou permissões.
+
+# Monitoramento
+
+- `GET /actuator/health`: saúde da API (usado pelo deploy).
+- `GET /actuator/prometheus`: métricas da API (requisições, tempo de resposta, erros, memória),
+  lidas pelo Prometheus. Na VPS esse endereço não fica acessível de fora.
+- Grafana com o painel **Prontê - Visão geral**: disponibilidade da API e do banco, requisições,
+  tempo de resposta, erros, memória da JVM, conexões do banco e CPU, memória e disco do servidor.
 
 # Testes Automatizados
 
@@ -91,8 +127,33 @@ de linhas ficar abaixo de 60%.
 # CI/CD
 
 - **CI** (`.github/workflows/ci.yml`): em todo push e pull request para `main` e `develop`, roda `./mvnw verify`.
-- **CD** (`.github/workflows/cd.yml`): a cada alteração na `main`, gera a imagem Docker, publica em
-  **stage** automaticamente e publica em **produção** somente depois que um integrante do grupo aprovar.
+- **CD** (`.github/workflows/cd.yml`): a cada alteração na `main`, testa, gera a imagem Docker, publica em
+  **homologação** automaticamente e publica em **produção** somente depois que um integrante do grupo aprovar.
+
+# Infraestrutura (VPS)
+
+Tudo roda em containers Docker numa VPS, descritos em `deploy/docker-compose.yml`:
+
+| Container | Função |
+| --- | --- |
+| `proxy` | Caddy: entrada pela internet com HTTPS automático |
+| `api-homologacao` | API no ambiente de homologação (banco `projeto_homologacao`) |
+| `api-producao` | API no ambiente de produção (banco `projeto_producao`) |
+| `banco` | MariaDB com auditoria; cada ambiente tem banco e usuário próprios |
+| `prometheus` | Coleta as métricas da API, do banco e do servidor |
+| `grafana` | Painel de monitoramento |
+| `monitor-banco`, `monitor-servidor` | Exportadores de métricas do MariaDB e da VPS |
+
+Primeira instalação na VPS (com Docker instalado):
+
+```
+git clone https://github.com/Projeto-QualidadeDeSoftware/Projeto-API.git
+cd Projeto-API/deploy
+cp .env.exemplo .env      # preencher senhas, chaves e endereços
+docker compose up -d
+```
+
+Depois disso as atualizações da API são feitas pelo CD, que executa `deploy/atualizar.sh` na VPS.
 
 # Funcionalidades
 - CRUD completo de Clientes
@@ -105,7 +166,8 @@ de linhas ficar abaixo de 60%.
 
 # Endpoints da API
 
-Todas as rotas exigem login, exceto `POST /auth/login` e `GET /actuator/health`.
+Todas as rotas exigem login, exceto `POST /auth/login`, `GET /actuator/health`,
+`GET /actuator/prometheus` e a documentação (`/swagger-ui.html` e `/v3/api-docs`).
 Sem token válido a resposta é `401`.
 
 # Autenticação
@@ -160,6 +222,7 @@ Devolve `id`, `nome` e `cargo` do funcionário dono do token.
 | --- | --- |
 | 400 | Dados inválidos |
 | 401 | Sem login, token inválido/expirado ou CPF/senha errados |
+| 403 | Funcionário sem permissão (auditoria) |
 | 404 | Registro não encontrado |
 | 409 | Estoque insuficiente ou CPF de funcionário já cadastrado |
 | 503 | Assistente de IA indisponível |
@@ -218,6 +281,10 @@ POST /funcionario
 
 O CPF é o login do funcionário e não pode se repetir. A senha é gravada como hash
 e nunca é devolvida nas respostas.
+
+O CPF (de funcionários e clientes) pode ser enviado com ou sem máscara (`111.111.111-11` ou
+`11111111111`), no cadastro e no login, mas é sempre gravado e devolvido só com números.
+CPF com quantidade de dígitos diferente de 11 é recusado com `400`.
 
 ## Listar Funcionários
 ```

@@ -11,8 +11,11 @@ import com.silva.projeto.model.dto.PerguntaRequest;
 import com.silva.projeto.model.dto.RespostaAssistenteDTO;
 import com.silva.projeto.service.AssistenteService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/assistente")
+@Tag(name = "Assistente de IA")
 public class AssistenteController {
 
     private final AssistenteService service;

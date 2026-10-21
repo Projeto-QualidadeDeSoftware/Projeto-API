@@ -16,8 +16,11 @@ import com.silva.projeto.model.dto.ProdutoDTO;
 import com.silva.projeto.model.entity.Produto;
 import com.silva.projeto.service.ProdutoService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/produto")
+@Tag(name = "Produtos")
 public class ProdutoController {
 
     private final ProdutoService service;

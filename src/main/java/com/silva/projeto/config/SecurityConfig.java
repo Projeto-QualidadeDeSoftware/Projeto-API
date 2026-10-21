@@ -32,8 +32,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 
 /**
- * Regras de acesso da API: tudo exige um token JWT válido, exceto o login
- * e a verificação de saúde usada pelo deploy.
+ * Regras de acesso da API: tudo exige um token JWT válido, exceto o login,
+ * a verificação de saúde usada pelo deploy, as métricas lidas pelo Prometheus
+ * (bloqueadas para fora do servidor pelo Caddy) e a documentação da API.
  */
 @Configuration
 @EnableWebSecurity
@@ -53,7 +54,8 @@ public class SecurityConfig {
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/prometheus").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(Customizer.withDefaults())

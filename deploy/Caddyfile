@@ -1,0 +1,24 @@
+# Proxy de entrada: gera e renova os certificados HTTPS sozinho (Let's Encrypt).
+# As métricas da API só são lidas pelo Prometheus, dentro do servidor.
+
+{$DOMINIO_PRODUCAO} {
+	@interno path /actuator/prometheus /actuator/metrics*
+	respond @interno 404
+	reverse_proxy api-producao:8080
+}
+
+{$DOMINIO_HOMOLOGACAO} {
+	@interno path /actuator/prometheus /actuator/metrics*
+	respond @interno 404
+	reverse_proxy api-homologacao:8080
+}
+
+{$DOMINIO_GRAFANA} {
+	reverse_proxy grafana:3000
+}
+
+{$DOMINIO_WEB} {
+	root * /srv/web
+	try_files {path} /index.html
+	file_server
+}
