@@ -16,8 +16,11 @@ import com.silva.projeto.model.dto.VendaDTO;
 import com.silva.projeto.model.dto.VendaRequest;
 import com.silva.projeto.service.VendaService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/venda")
+@Tag(name = "Vendas")
 public class VendaController {
 
     private final VendaService vendaService;

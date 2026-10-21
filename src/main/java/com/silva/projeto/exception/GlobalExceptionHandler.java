@@ -20,6 +20,16 @@ public class GlobalExceptionHandler {
         return responder(HttpStatus.UNAUTHORIZED, ex.getMessage());
     }
 
+    @ExceptionHandler(AcessoNegadoException.class)
+    public ResponseEntity<ErroResposta> tratarAcessoNegado(AcessoNegadoException ex) {
+        return responder(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(DadoInvalidoException.class)
+    public ResponseEntity<ErroResposta> tratarDadoInvalido(DadoInvalidoException ex) {
+        return responder(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
+
     @ExceptionHandler(ConflitoException.class)
     public ResponseEntity<ErroResposta> tratarConflito(ConflitoException ex) {
         return responder(HttpStatus.CONFLICT, ex.getMessage());

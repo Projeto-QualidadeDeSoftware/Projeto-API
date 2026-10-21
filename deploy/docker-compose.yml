@@ -1,0 +1,133 @@
+# Infraestrutura da VPS: homologação e produção da API, banco, proxy com HTTPS
+# e monitoramento. Os valores vêm do arquivo .env (modelo em .env.exemplo).
+
+services:
+
+  proxy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO_PRODUCAO: ${DOMINIO_PRODUCAO}
+      DOMINIO_HOMOLOGACAO: ${DOMINIO_HOMOLOGACAO}
+      DOMINIO_GRAFANA: ${DOMINIO_GRAFANA}
+      DOMINIO_WEB: ${DOMINIO_WEB}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv/web:ro
+      - caddy-dados:/data
+      - caddy-config:/config
+
+  banco:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${BANCO_SENHA_ROOT}
+      SENHA_HOMOLOGACAO: ${BANCO_SENHA_HOMOLOGACAO}
+      SENHA_PRODUCAO: ${BANCO_SENHA_PRODUCAO}
+      SENHA_MONITORAMENTO: ${BANCO_SENHA_MONITORAMENTO}
+    volumes:
+      - banco-dados:/var/lib/mysql
+      - ./mariadb/conf.d:/etc/mysql/conf.d:ro
+      - ./mariadb/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  api-homologacao:
+    image: ${IMAGEM_HOMOLOGACAO}
+    restart: unless-stopped
+    depends_on:
+      banco:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: homologacao
+      SPRING_DATASOURCE_URL: jdbc:mysql://banco:3306/projeto_homologacao
+      SPRING_DATASOURCE_USERNAME: app_homologacao
+      SPRING_DATASOURCE_PASSWORD: ${BANCO_SENHA_HOMOLOGACAO}
+      JWT_SECRET: ${JWT_SECRET_HOMOLOGACAO}
+      ADMIN_CPF: ${ADMIN_CPF_HOMOLOGACAO}
+      ADMIN_SENHA: ${ADMIN_SENHA_HOMOLOGACAO}
+      CORS_ORIGENS: ${CORS_ORIGENS_HOMOLOGACAO}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+      JAVA_TOOL_OPTIONS: -Xmx256m -XX:+UseSerialGC
+    volumes:
+      - logs-homologacao:/app/logs
+
+  api-producao:
+    image: ${IMAGEM_PRODUCAO}
+    restart: unless-stopped
+    depends_on:
+      banco:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: producao
+      SPRING_DATASOURCE_URL: jdbc:mysql://banco:3306/projeto_producao
+      SPRING_DATASOURCE_USERNAME: app_producao
+      SPRING_DATASOURCE_PASSWORD: ${BANCO_SENHA_PRODUCAO}
+      JWT_SECRET: ${JWT_SECRET_PRODUCAO}
+      ADMIN_CPF: ${ADMIN_CPF_PRODUCAO}
+      ADMIN_SENHA: ${ADMIN_SENHA_PRODUCAO}
+      CORS_ORIGENS: ${CORS_ORIGENS_PRODUCAO}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY}
+      JAVA_TOOL_OPTIONS: -Xmx256m -XX:+UseSerialGC
+    volumes:
+      - logs-producao:/app/logs
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-dados:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_SENHA}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://${DOMINIO_GRAFANA}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-dados:/var/lib/grafana
+
+  monitor-banco:
+    image: prom/mysqld-exporter:v0.17.2
+    restart: unless-stopped
+    depends_on:
+      banco:
+        condition: service_healthy
+    command:
+      - --mysqld.address=banco:3306
+      - --mysqld.username=monitoramento
+    environment:
+      MYSQLD_EXPORTER_PASSWORD: ${BANCO_SENHA_MONITORAMENTO}
+
+  monitor-servidor:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+
+volumes:
+  caddy-dados:
+  caddy-config:
+  banco-dados:
+  logs-homologacao:
+  logs-producao:
+  prometheus-dados:
+  grafana-dados:

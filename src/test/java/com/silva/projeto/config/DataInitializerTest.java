@@ -14,16 +14,19 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.silva.projeto.model.entity.Cliente;
 import com.silva.projeto.model.entity.Funcionario;
+import com.silva.projeto.repository.ClienteRepository;
 import com.silva.projeto.repository.FuncionarioRepository;
 
 class DataInitializerTest {
 
     private final FuncionarioRepository repository = mock(FuncionarioRepository.class);
+    private final ClienteRepository clienteRepository = mock(ClienteRepository.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
     private DataInitializer inicializador(String adminSenha) {
-        return new DataInitializer(repository, passwordEncoder, "00000000000", adminSenha);
+        return new DataInitializer(repository, clienteRepository, passwordEncoder, "000.000.000-00", adminSenha);
     }
 
     @Test
@@ -73,5 +76,35 @@ class DataInitializerTest {
         inicializador("").run(null);
 
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deixaCpfDeFuncionarioEClienteSoComNumeros() {
+        String hash = passwordEncoder.encode("1234");
+        Funcionario funcionario = new Funcionario("Luiz", "111.111.111-11", "Operador de Caixa", hash, 2200.0);
+        Cliente cliente = new Cliente("Maria", "123.456.789-01", "maria@email.com", "18999999999");
+        when(repository.findAll()).thenReturn(List.of(funcionario));
+        when(clienteRepository.findAll()).thenReturn(List.of(cliente));
+        when(repository.count()).thenReturn(1L);
+
+        inicializador("admin123").run(null);
+
+        assertThat(funcionario.getCpf()).isEqualTo("11111111111");
+        assertThat(funcionario.getSenha()).isEqualTo(hash);
+        assertThat(cliente.getCpf()).isEqualTo("12345678901");
+        verify(repository).save(funcionario);
+        verify(clienteRepository).save(cliente);
+    }
+
+    @Test
+    void usuarioInicialTemCpfSoComNumeros() {
+        when(repository.findAll()).thenReturn(List.of());
+        when(repository.count()).thenReturn(0L);
+
+        inicializador("admin123").run(null);
+
+        ArgumentCaptor<Funcionario> criado = ArgumentCaptor.forClass(Funcionario.class);
+        verify(repository).save(criado.capture());
+        assertThat(criado.getValue().getCpf()).isEqualTo("00000000000");
     }
 }

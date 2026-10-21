@@ -2,6 +2,8 @@ package com.silva.projeto.service;
 
 import java.time.Instant;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -11,9 +13,12 @@ import com.silva.projeto.model.dto.LoginResponse;
 import com.silva.projeto.model.dto.UsuarioLogadoDTO;
 import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.repository.FuncionarioRepository;
+import com.silva.projeto.util.Cpf;
 
 @Service
 public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
     private final FuncionarioRepository repository;
     private final PasswordEncoder passwordEncoder;
@@ -32,10 +37,16 @@ public class AuthService {
     public LoginResponse login(LoginRequest dados) {
 
         // Mesma mensagem para CPF inexistente e senha errada, para não revelar quais CPFs existem.
-        Funcionario funcionario = repository.findFirstByCpf(dados.cpf())
+        // Aceita o CPF com ou sem máscara: no banco ele está só com números.
+        Funcionario funcionario = repository.findFirstByCpf(Cpf.normalizar(dados.cpf()))
                 .filter(encontrado -> encontrado.getSenha() != null
                         && passwordEncoder.matches(dados.senha(), encontrado.getSenha()))
-                .orElseThrow(() -> new BadCredentialsException("CPF ou senha inválidos"));
+                .orElseThrow(() -> {
+                    log.warn("Login recusado para o CPF {}", Cpf.mascarar(dados.cpf()));
+                    return new BadCredentialsException("CPF ou senha inválidos");
+                });
+
+        log.info("Login do funcionário {}", funcionario.getId());
 
         Instant agora = Instant.now();
 

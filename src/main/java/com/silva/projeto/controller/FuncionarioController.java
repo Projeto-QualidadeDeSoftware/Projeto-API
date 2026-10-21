@@ -17,8 +17,11 @@ import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.model.entity.Venda;
 import com.silva.projeto.service.FuncionarioService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/funcionario")
+@Tag(name = "Funcionários")
 public class FuncionarioController {
 
     private final FuncionarioService service;

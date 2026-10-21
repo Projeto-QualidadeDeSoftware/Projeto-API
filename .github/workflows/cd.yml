@@ -2,11 +2,11 @@ name: CD
 
 # Entrega contínua: a cada alteração na main
 #   1. testa e gera a imagem Docker (publicada no GitHub Container Registry);
-#   2. publica automaticamente em STAGE;
+#   2. publica automaticamente em HOMOLOGAÇÃO, na VPS;
 #   3. espera a aprovação de um integrante do grupo e então publica em PRODUÇÃO.
 #
-# A aprovação é configurada no GitHub, em Settings > Environments > production
-# (Required reviewers).
+# A aprovação é configurada no GitHub, em Settings > Environments > producao
+# (Required reviewers). O acesso à VPS usa os secrets VPS_HOST, VPS_USUARIO e VPS_CHAVE_SSH.
 
 on:
   push:
@@ -49,10 +49,13 @@ jobs:
           ./mvnw -B verify
 
       # O nome da imagem precisa estar em minúsculas; a mesma imagem (identificada
-      # pelo commit) é a que vai para stage e depois para produção.
+      # pelo commit) é a que vai para homologação e depois para produção.
       - name: Definir nome da imagem
         id: imagem
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        run: |
+          base="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "image=$base:${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Entrar no GitHub Container Registry
         uses: docker/login-action@v3
@@ -62,31 +65,45 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Gerar e publicar a imagem Docker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ${{ steps.imagem.outputs.image }}
+          tags: |
+            ${{ steps.imagem.outputs.image }}
+            ${{ steps.imagem.outputs.base }}:latest
 
-  deploy-stage:
-    name: Deploy em stage
+  deploy-homologacao:
+    name: Deploy em homologação
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: stage
+      name: homologacao
       url: ${{ vars.APP_URL }}
 
     steps:
-      - name: Publicar a imagem em stage
+      - name: Configurar acesso SSH à VPS
         env:
-          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
-          IMAGE: ${{ needs.build.outputs.image }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_CHAVE_SSH: ${{ secrets.VPS_CHAVE_SSH }}
         run: |
-          if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "::error::Defina o secret DEPLOY_HOOK_URL no environment 'stage'"
+          if [ -z "$VPS_HOST" ] || [ -z "$VPS_CHAVE_SSH" ]; then
+            echo "::error::Defina os secrets VPS_HOST, VPS_USUARIO e VPS_CHAVE_SSH"
             exit 1
           fi
-          curl --fail --silent --show-error --get "$DEPLOY_HOOK_URL" --data-urlencode "imgURL=$IMAGE"
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_CHAVE_SSH" > ~/.ssh/vps
+          chmod 600 ~/.ssh/vps
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
+      - name: Publicar a imagem em homologação
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USUARIO: ${{ secrets.VPS_USUARIO }}
+          IMAGE: ${{ needs.build.outputs.image }}
+        run: |
+          ssh -i ~/.ssh/vps "$VPS_USUARIO@$VPS_HOST" \
+            "cd ~/Projeto-API && git pull --ff-only && bash deploy/atualizar.sh homologacao $IMAGE"
 
       - name: Conferir se a API respondeu
         if: vars.APP_URL != ''
@@ -104,24 +121,32 @@ jobs:
 
   deploy-producao:
     name: Deploy em produção
-    needs: deploy-stage
+    needs: [build, deploy-homologacao]
     runs-on: ubuntu-latest
     # Este environment tem "Required reviewers": o job fica parado até alguém do grupo aprovar.
     environment:
-      name: production
+      name: producao
       url: ${{ vars.APP_URL }}
 
     steps:
+      - name: Configurar acesso SSH à VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_CHAVE_SSH: ${{ secrets.VPS_CHAVE_SSH }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_CHAVE_SSH" > ~/.ssh/vps
+          chmod 600 ~/.ssh/vps
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+
       - name: Publicar a imagem em produção
         env:
-          DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USUARIO: ${{ secrets.VPS_USUARIO }}
           IMAGE: ${{ needs.build.outputs.image }}
         run: |
-          if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "::error::Defina o secret DEPLOY_HOOK_URL no environment 'production'"
-            exit 1
-          fi
-          curl --fail --silent --show-error --get "$DEPLOY_HOOK_URL" --data-urlencode "imgURL=$IMAGE"
+          ssh -i ~/.ssh/vps "$VPS_USUARIO@$VPS_HOST" \
+            "cd ~/Projeto-API && bash deploy/atualizar.sh producao $IMAGE"
 
       - name: Conferir se a API respondeu
         if: vars.APP_URL != ''

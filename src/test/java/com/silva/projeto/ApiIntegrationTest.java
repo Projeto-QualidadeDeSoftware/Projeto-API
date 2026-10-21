@@ -60,7 +60,7 @@ class ApiIntegrationTest {
     // ---------- acesso sem login ----------
 
     @ParameterizedTest
-    @ValueSource(strings = { "/cliente", "/funcionario", "/produto", "/venda", "/auth/me", "/cliente/1/vendas" })
+    @ValueSource(strings = { "/cliente", "/funcionario", "/produto", "/venda", "/auth/me", "/cliente/1/vendas", "/auditoria" })
     void rotasDeConsultaExigemLogin(String rota) throws Exception {
         mvc.perform(get(rota))
                 .andExpect(status().isUnauthorized())
@@ -90,6 +90,16 @@ class ApiIntegrationTest {
         mvc.perform(get("/actuator/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
+    void documentacaoDaApiEPublicaEDescreveOLogin() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Prontê Conveniência - API"))
+                .andExpect(jsonPath("$.paths['/produto']").exists())
+                .andExpect(jsonPath("$.paths['/auth/login'].post").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.token.scheme").value("bearer"));
     }
 
     // ---------- login ----------
@@ -162,6 +172,43 @@ class ApiIntegrationTest {
         // E o CPF, que é o login, não pode ser cadastrado duas vezes.
         mvc.perform(json(post("/funcionario"), novo).header("Authorization", token))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void loginAceitaCpfComOuSemMascara() throws Exception {
+        assertThat(entrar("000.000.000-00", "admin123")).startsWith("Bearer ");
+        assertThat(entrar("00000000000", "admin123")).startsWith("Bearer ");
+    }
+
+    @Test
+    void cpfCadastradoComMascaraFicaSoComNumerosEValeNoLogin() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/funcionario"),
+                "{\"nome\":\"Ana\",\"cpf\":\"444.555.666-77\",\"cargo\":\"Gerente\","
+                + "\"senha\":\"segredo2\",\"salario\":3000.00}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cpf").value("44455566677"));
+
+        assertThat(entrar("44455566677", "segredo2")).startsWith("Bearer ");
+        assertThat(entrar("444.555.666-77", "segredo2")).startsWith("Bearer ");
+
+        // O mesmo CPF digitado sem máscara é reconhecido como repetido.
+        mvc.perform(json(post("/funcionario"),
+                "{\"nome\":\"Ana 2\",\"cpf\":\"44455566677\",\"cargo\":\"Gerente\","
+                + "\"senha\":\"segredo3\",\"salario\":3000.00}").header("Authorization", token))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void clienteComCpfInvalidoERecusado() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Joana\",\"cpf\":\"123\",\"email\":\"joana@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("CPF deve ter 11 dígitos"));
     }
 
     // ---------- venda e estoque ----------
@@ -313,6 +360,56 @@ class ApiIntegrationTest {
     }
 
     // ---------- auxiliares ----------
+
+    // ---------- auditoria ----------
+
+    @Test
+    void alteracoesFicamRegistradasNaAuditoriaEConsultasNao() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/produto"),
+                "{\"nome\":\"Caderno\",\"descricao\":\"Caderno 96 folhas\",\"preco\":20.0,"
+                + "\"estoque\":5}").header("Authorization", token))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/auditoria").param("tamanho", "200").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.acao == 'INCLUSAO' && @.recurso == '/produto' "
+                        + "&& @.usuario == 'Administrador' && @.status == 200)]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.metodo == 'GET')]").isEmpty());
+    }
+
+    @Test
+    void loginsFicamNaAuditoriaSemSenhaEComCpfMascarado() throws Exception {
+        mvc.perform(json(post("/auth/login"), "{\"cpf\":\"123.456.789-01\",\"senha\":\"senhaSecreta9\"}"))
+                .andExpect(status().isUnauthorized());
+
+        String token = entrar("00000000000", "admin123");
+
+        String auditoria = mvc.perform(get("/auditoria").param("tamanho", "200").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.acao == 'LOGIN_RECUSADO' && @.usuario == '123.***.***-01')]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.acao == 'LOGIN' && @.usuario == 'Administrador')]").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(auditoria).doesNotContain("senhaSecreta9").doesNotContain("12345678901");
+    }
+
+    @Test
+    void auditoriaSoPodeSerConsultadaPorAdministrador() throws Exception {
+        String admin = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/funcionario"),
+                "{\"nome\":\"Vera\",\"cpf\":\"52998224725\",\"cargo\":\"Vendedor\","
+                + "\"senha\":\"1234\",\"salario\":1800.0}").header("Authorization", admin))
+                .andExpect(status().isOk());
+
+        String vendedora = entrar("52998224725", "1234");
+
+        mvc.perform(get("/auditoria").header("Authorization", vendedora))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
 
     private static MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder requisicao, String corpo) {
         return requisicao.contentType(MediaType.APPLICATION_JSON).content(corpo);

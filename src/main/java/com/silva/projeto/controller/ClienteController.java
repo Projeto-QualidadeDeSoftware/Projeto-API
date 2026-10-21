@@ -17,8 +17,11 @@ import com.silva.projeto.model.entity.Cliente;
 import com.silva.projeto.model.entity.Venda;
 import com.silva.projeto.service.ClienteService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/cliente")
+@Tag(name = "Clientes")
 public class ClienteController {
 	
     private final ClienteService service;
