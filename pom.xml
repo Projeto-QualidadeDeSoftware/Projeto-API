@@ -77,6 +77,23 @@
         <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!-- METRICAS: /actuator/prometheus, lido pelo Prometheus -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-micrometer-metrics</artifactId>
+    </dependency>
+    <dependency>
+        <groupId>io.micrometer</groupId>
+        <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+
+    <!-- DOCUMENTACAO DA API: Swagger UI em /swagger-ui.html -->
+    <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>3.0.2</version>
+    </dependency>
+
     <!-- TEST -->
     <dependency>
         <groupId>org.springframework.boot</groupId>

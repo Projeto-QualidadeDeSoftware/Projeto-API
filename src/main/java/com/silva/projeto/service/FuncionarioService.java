@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import com.silva.projeto.exception.ConflitoException;
 import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.repository.FuncionarioRepository;
+import com.silva.projeto.util.Cpf;
 import com.silva.projeto.model.dto.FuncionarioDTO;
 
 @Service
@@ -35,6 +36,8 @@ public class FuncionarioService {
 
     public Funcionario salvar(Funcionario funcionario) {
 
+        funcionario.setCpf(Cpf.validar(funcionario.getCpf()));
+
         // O CPF é o login, então não pode se repetir.
         if (repository.findFirstByCpf(funcionario.getCpf()).isPresent()) {
             throw new ConflitoException("Já existe um funcionário com este CPF");
@@ -48,15 +51,16 @@ public class FuncionarioService {
     public Funcionario atualizar(Long id, Funcionario funcionarioAtualizado) {
 
         Funcionario funcionario = buscarPorId(id);
+        String cpf = Cpf.validar(funcionarioAtualizado.getCpf());
 
-        repository.findFirstByCpf(funcionarioAtualizado.getCpf())
+        repository.findFirstByCpf(cpf)
                 .filter(outro -> !outro.getId().equals(id))
                 .ifPresent(outro -> {
                     throw new ConflitoException("Já existe um funcionário com este CPF");
                 });
 
         funcionario.setNome(funcionarioAtualizado.getNome());
-        funcionario.setCpf(funcionarioAtualizado.getCpf());
+        funcionario.setCpf(cpf);
         funcionario.setCargo(funcionarioAtualizado.getCargo());
         funcionario.setSenha(passwordEncoder.encode(funcionarioAtualizado.getSenha()));
         funcionario.setSalario(funcionarioAtualizado.getSalario());

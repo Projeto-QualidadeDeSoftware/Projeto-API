@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import com.silva.projeto.model.entity.Cliente;
 import com.silva.projeto.repository.ClienteRepository;
+import com.silva.projeto.util.Cpf;
 import com.silva.projeto.model.dto.ClienteDTO;
 
 @Service
@@ -27,6 +28,7 @@ public class ClienteService {
     }
 
     public Cliente salvar(Cliente cliente) {
+        cliente.setCpf(Cpf.validar(cliente.getCpf()));
         return repository.save(cliente);
     }
 
@@ -35,7 +37,7 @@ public class ClienteService {
         Cliente cliente = buscarPorId(id);
 
         cliente.setNome(clienteAtualizado.getNome());
-        cliente.setCpf(clienteAtualizado.getCpf());
+        cliente.setCpf(Cpf.validar(clienteAtualizado.getCpf()));
         cliente.setEmail(clienteAtualizado.getEmail());
         cliente.setTelefone(clienteAtualizado.getTelefone());
 

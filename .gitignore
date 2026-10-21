@@ -1,5 +1,6 @@
 HELP.md
 target/
+bin/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
@@ -56,3 +57,9 @@ build/
 # virtual machine crash logs
 hs_err_pid*
 replay_pid*
+### Implantação (VPS) ###
+logs/
+deploy/.env
+deploy/implantacoes.log
+deploy/web/*
+!deploy/web/.gitkeep
