@@ -136,7 +136,7 @@ Tudo roda em containers Docker numa VPS, descritos em `deploy/docker-compose.yml
 
 | Container | Função |
 | --- | --- |
-| `proxy` | Caddy: entrada pela internet com HTTPS automático |
+| `proxy` | Caddy: entrada pela internet com HTTPS automático; serve o front web de produção (`deploy/web`) e o de homologação (`deploy/web-homologacao`), publicados pelo CD do Projeto-FrontWeb |
 | `api-homologacao` | API no ambiente de homologação (banco `projeto_homologacao`) |
 | `api-producao` | API no ambiente de produção (banco `projeto_producao`) |
 | `banco` | MariaDB com auditoria; cada ambiente tem banco e usuário próprios |

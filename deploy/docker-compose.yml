@@ -14,9 +14,11 @@ services:
       DOMINIO_HOMOLOGACAO: ${DOMINIO_HOMOLOGACAO}
       DOMINIO_GRAFANA: ${DOMINIO_GRAFANA}
       DOMINIO_WEB: ${DOMINIO_WEB}
+      DOMINIO_WEB_HOMOLOGACAO: ${DOMINIO_WEB_HOMOLOGACAO}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./web:/srv/web:ro
+      - ./web-homologacao:/srv/web-homologacao:ro
       - caddy-dados:/data
       - caddy-config:/config
 
