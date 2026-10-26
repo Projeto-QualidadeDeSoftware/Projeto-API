@@ -22,3 +22,9 @@
 	try_files {path} /index.html
 	file_server
 }
+
+{$DOMINIO_WEB_HOMOLOGACAO} {
+	root * /srv/web-homologacao
+	try_files {path} /index.html
+	file_server
+}
