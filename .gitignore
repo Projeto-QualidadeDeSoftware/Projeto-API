@@ -63,5 +63,6 @@ deploy/.env
 deploy/implantacoes.log
 deploy/web/*
 !deploy/web/.gitkeep
+deploy/backups/
 deploy/web-homologacao/*
 !deploy/web-homologacao/.gitkeep
