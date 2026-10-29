@@ -40,6 +40,22 @@ services:
       timeout: 5s
       retries: 12
 
+  backup:
+    image: mariadb:10.11
+    restart: unless-stopped
+    depends_on:
+      banco:
+        condition: service_healthy
+    entrypoint: ["bash", "/backup.sh"]
+    environment:
+      MARIADB_ROOT_PASSWORD: ${BANCO_SENHA_ROOT}
+      TZ: America/Sao_Paulo
+      HORA_BACKUP: "03:00"
+      DIAS_RETENCAO: "7"
+    volumes:
+      - ./backup/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+
   api-homologacao:
     image: ${IMAGEM_HOMOLOGACAO}
     restart: unless-stopped
