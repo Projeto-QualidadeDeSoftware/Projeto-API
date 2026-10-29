@@ -19,6 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.silva.projeto.exception.ConflitoException;
+import com.silva.projeto.exception.DadoInvalidoException;
 import com.silva.projeto.model.dto.ItemVendaRequest;
 import com.silva.projeto.model.dto.VendaRequest;
 import com.silva.projeto.model.entity.Cliente;
@@ -183,5 +184,17 @@ class VendaServiceTest {
         venda.getItens().add(new ItemVenda(
                 quantidade, produto.getPreco() * quantidade, produto, venda));
         return venda;
+    }
+
+    @Test
+    void salvarRecusaVendaComDataNoFuturo() {
+        VendaRequest futura = new VendaRequest(
+                LocalDate.now().plusDays(2), 1L, 1L, List.of(new ItemVendaRequest(1L, 1)));
+
+        assertThatThrownBy(() -> service.salvar(futura))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("A data da venda não pode ser no futuro");
+
+        verify(vendaRepository, never()).save(any());
     }
 }

@@ -1,5 +1,7 @@
 package com.silva.projeto.service;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.silva.projeto.exception.ConflitoException;
+import com.silva.projeto.exception.DadoInvalidoException;
+import com.silva.projeto.exception.RecursoNaoEncontradoException;
 import com.silva.projeto.model.entity.Cliente;
 import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.model.entity.ItemVenda;
@@ -26,6 +30,9 @@ import com.silva.projeto.model.dto.VendaRequest;
 
 @Service
 public class VendaService {
+
+    /** A loja fica no Brasil: "hoje" é o dia em Brasília, mesmo com o servidor em UTC. */
+    private static final ZoneId FUSO_DA_LOJA = ZoneId.of("America/Sao_Paulo");
 
     private final VendaRepository vendaRepository;
     private final ClienteRepository clienteRepository;
@@ -50,7 +57,7 @@ public class VendaService {
 
     public Venda buscarPorId(Long id) {
         return vendaRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Venda não encontrada"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Venda não encontrada"));
     }
 
     @Transactional
@@ -93,11 +100,15 @@ public class VendaService {
      */
     private void preencher(Venda venda, VendaRequest dados) {
 
+        if (dados.dataVenda().isAfter(LocalDate.now(FUSO_DA_LOJA))) {
+            throw new DadoInvalidoException("A data da venda não pode ser no futuro");
+        }
+
         Cliente cliente = clienteRepository.findById(dados.clienteId())
-                .orElseThrow(() -> new RuntimeException("Cliente não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Cliente não encontrado"));
 
         Funcionario funcionario = funcionarioRepository.findById(dados.funcionarioId())
-                .orElseThrow(() -> new RuntimeException("Funcionário não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Funcionário não encontrado"));
 
         venda.setDataVenda(dados.dataVenda());
         venda.setCliente(cliente);
@@ -118,7 +129,7 @@ public class VendaService {
             int quantidade = entrada.getValue();
 
             Produto produto = produtoRepository.findById(produtoId)
-                    .orElseThrow(() -> new RuntimeException(
+                    .orElseThrow(() -> new RecursoNaoEncontradoException(
                             "Produto não encontrado: id " + produtoId));
 
             int estoque = produto.getEstoque() == null ? 0 : produto.getEstoque();

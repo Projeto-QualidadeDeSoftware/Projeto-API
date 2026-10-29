@@ -149,7 +149,7 @@ class ApiIntegrationTest {
     void senhaDoFuncionarioNuncaApareceNasRespostasEFuncionaNoLogin() throws Exception {
         String token = entrar("00000000000", "admin123");
 
-        String novo = "{\"nome\":\"Carlos\",\"cpf\":\"11122233344\",\"cargo\":\"Vendedor\","
+        String novo = "{\"nome\":\"Carlos\",\"cpf\":\"11122233396\",\"cargo\":\"Vendedor\","
                 + "\"senha\":\"segredo1\",\"salario\":2500.00}";
 
         String criado = mvc.perform(json(post("/funcionario"), novo).header("Authorization", token))
@@ -167,7 +167,7 @@ class ApiIntegrationTest {
         assertThat(lista).doesNotContain("senha").doesNotContain("$2a$");
 
         // O novo funcionário consegue entrar com a senha que foi cadastrada.
-        assertThat(entrar("11122233344", "segredo1")).startsWith("Bearer ");
+        assertThat(entrar("11122233396", "segredo1")).startsWith("Bearer ");
 
         // E o CPF, que é o login, não pode ser cadastrado duas vezes.
         mvc.perform(json(post("/funcionario"), novo).header("Authorization", token))
@@ -185,17 +185,17 @@ class ApiIntegrationTest {
         String token = entrar("00000000000", "admin123");
 
         mvc.perform(json(post("/funcionario"),
-                "{\"nome\":\"Ana\",\"cpf\":\"444.555.666-77\",\"cargo\":\"Gerente\","
+                "{\"nome\":\"Ana\",\"cpf\":\"444.555.666-19\",\"cargo\":\"Gerente\","
                 + "\"senha\":\"segredo2\",\"salario\":3000.00}").header("Authorization", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.cpf").value("44455566677"));
+                .andExpect(jsonPath("$.cpf").value("44455566619"));
 
-        assertThat(entrar("44455566677", "segredo2")).startsWith("Bearer ");
-        assertThat(entrar("444.555.666-77", "segredo2")).startsWith("Bearer ");
+        assertThat(entrar("44455566619", "segredo2")).startsWith("Bearer ");
+        assertThat(entrar("444.555.666-19", "segredo2")).startsWith("Bearer ");
 
         // O mesmo CPF digitado sem máscara é reconhecido como repetido.
         mvc.perform(json(post("/funcionario"),
-                "{\"nome\":\"Ana 2\",\"cpf\":\"44455566677\",\"cargo\":\"Gerente\","
+                "{\"nome\":\"Ana 2\",\"cpf\":\"44455566619\",\"cargo\":\"Gerente\","
                 + "\"senha\":\"segredo3\",\"salario\":3000.00}").header("Authorization", token))
                 .andExpect(status().isConflict());
     }
@@ -211,7 +211,136 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.mensagem").value("CPF deve ter 11 dígitos"));
     }
 
+    @Test
+    void clienteComDigitoVerificadorErradoERecusado() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Joana\",\"cpf\":\"111.111.111-11\",\"email\":\"joana@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("CPF inválido"));
+    }
+
+    @Test
+    void clienteComCpfRepetidoERecusado() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        int primeiro = idDe(mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Paulo\",\"cpf\":\"321.321.321-78\",\"email\":\"paulo@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        // O mesmo CPF sem máscara é reconhecido como repetido.
+        mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Paulo 2\",\"cpf\":\"32132132178\",\"email\":\"paulo2@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensagem").value("Já existe um cliente com este CPF"));
+
+        // Atualizar o próprio cliente mantendo o CPF continua permitido.
+        mvc.perform(json(put("/cliente/" + primeiro),
+                "{\"nome\":\"Paulo Souza\",\"cpf\":\"32132132178\",\"email\":\"paulo@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Paulo Souza"));
+    }
+
+    @Test
+    void excluirRegistroInexistenteDevolve404() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(delete("/cliente/999999").header("Authorization", token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").value("Cliente não encontrado"));
+        mvc.perform(delete("/produto/999999").header("Authorization", token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").value("Produto não encontrado"));
+        mvc.perform(delete("/funcionario/999999").header("Authorization", token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").value("Funcionário não encontrado"));
+    }
+
+    @Test
+    void requisicaoMalFormadaDevolve400() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/produto"), "{ isto não é json").header("Authorization", token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("Dados enviados em formato inválido"));
+
+        mvc.perform(get("/produto/abc").header("Authorization", token))
+                .andExpect(status().isBadRequest());
+    }
+
     // ---------- venda e estoque ----------
+
+    @Test
+    void vendaComDataNoFuturoERecusada() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        mvc.perform(json(post("/venda"),
+                "{\"dataVenda\":\"2030-01-01\",\"clienteId\":1,\"funcionarioId\":1,"
+                + "\"itens\":[{\"produtoId\":1,\"quantidade\":1}]}")
+                .header("Authorization", token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.mensagem").value("A data da venda não pode ser no futuro"));
+    }
+
+    @Test
+    void cadastrosComVendasNaoPodemSerExcluidos() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        int funcionarioId = idDe(mvc.perform(json(post("/funcionario"),
+                "{\"nome\":\"Bruno\",\"cpf\":\"74185296355\",\"cargo\":\"Operador de Caixa\","
+                + "\"senha\":\"segredo4\",\"salario\":2000.00}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        int clienteId = idDe(mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Lucia\",\"cpf\":\"15935748606\",\"email\":\"lucia@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        int produtoId = idDe(mvc.perform(json(post("/produto"),
+                "{\"nome\":\"Refrigerante\",\"descricao\":\"Lata 350ml\",\"preco\":6.0,"
+                + "\"estoque\":20}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        int vendaId = idDe(mvc.perform(json(post("/venda"),
+                pedido(clienteId, funcionarioId, produtoId, 2)).header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        mvc.perform(delete("/cliente/" + clienteId).header("Authorization", token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensagem").value(
+                        "Não é possível excluir o cliente porque ele tem vendas registradas"));
+
+        mvc.perform(delete("/produto/" + produtoId).header("Authorization", token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensagem").value(
+                        "Não é possível excluir o produto porque ele aparece em vendas registradas"));
+
+        mvc.perform(delete("/funcionario/" + funcionarioId).header("Authorization", token))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.mensagem").value(
+                        "Não é possível excluir o funcionário porque ele tem vendas registradas"));
+
+        // Sem a venda, os três cadastros podem ser excluídos.
+        mvc.perform(delete("/venda/" + vendaId).header("Authorization", token))
+                .andExpect(status().isOk());
+
+        mvc.perform(delete("/cliente/" + clienteId).header("Authorization", token))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/produto/" + produtoId).header("Authorization", token))
+                .andExpect(status().isOk());
+        mvc.perform(delete("/funcionario/" + funcionarioId).header("Authorization", token))
+                .andExpect(status().isOk());
+    }
 
     @Test
     void vendaDaBaixaNoEstoqueRecusaFaltaEDevolveAoExcluir() throws Exception {
@@ -222,7 +351,7 @@ class ApiIntegrationTest {
                 .andReturn().getResponse().getContentAsString());
 
         int clienteId = idDe(mvc.perform(json(post("/cliente"),
-                "{\"nome\":\"Maria\",\"cpf\":\"11111111111\",\"email\":\"maria@email.com\","
+                "{\"nome\":\"Maria\",\"cpf\":\"12312312387\",\"email\":\"maria@email.com\","
                 + "\"telefone\":\"18999999999\"}").header("Authorization", token))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());

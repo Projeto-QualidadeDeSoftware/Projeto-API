@@ -17,13 +17,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.silva.projeto.exception.ConflitoException;
 import com.silva.projeto.exception.DadoInvalidoException;
 import com.silva.projeto.model.entity.Funcionario;
+import com.silva.projeto.exception.RecursoNaoEncontradoException;
 import com.silva.projeto.repository.FuncionarioRepository;
+import com.silva.projeto.repository.VendaRepository;
 
 class FuncionarioServiceTest {
 
     private final FuncionarioRepository repository = mock(FuncionarioRepository.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
-    private final FuncionarioService service = new FuncionarioService(repository, passwordEncoder);
+    private final VendaRepository vendaRepository = mock(VendaRepository.class);
+    private final FuncionarioService service =
+            new FuncionarioService(repository, passwordEncoder, vendaRepository);
 
     private Funcionario carlos() {
         return new Funcionario("Carlos", "98765432100", "Vendedor", "123456", 2500.0);
@@ -115,5 +119,37 @@ class FuncionarioServiceTest {
                 .hasMessage("CPF deve ter 11 dígitos");
 
         verify(repository, never()).save(any());
+    }
+
+    @Test
+    void deletarFuncionarioSemVendas() {
+        Funcionario carlos = carlos();
+        when(repository.findById(5L)).thenReturn(Optional.of(carlos));
+        when(vendaRepository.existsByFuncionarioId(5L)).thenReturn(false);
+
+        service.deletar(5L);
+
+        verify(repository).delete(carlos);
+    }
+
+    @Test
+    void deletarRecusaFuncionarioComVendas() {
+        when(repository.findById(5L)).thenReturn(Optional.of(carlos()));
+        when(vendaRepository.existsByFuncionarioId(5L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deletar(5L))
+                .isInstanceOf(ConflitoException.class)
+                .hasMessage("Não é possível excluir o funcionário porque ele tem vendas registradas");
+
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void deletarFuncionarioInexistente() {
+        when(repository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.deletar(99L))
+                .isInstanceOf(RecursoNaoEncontradoException.class)
+                .hasMessage("Funcionário não encontrado");
     }
 }
