@@ -142,6 +142,7 @@ Tudo roda em containers Docker numa VPS, descritos em `deploy/docker-compose.yml
 | `banco` | MariaDB com auditoria; cada ambiente tem banco e usuário próprios |
 | `prometheus` | Coleta as métricas da API, do banco e do servidor |
 | `grafana` | Painel de monitoramento |
+| `backup` | Backup diário dos bancos de produção e homologação (seção *Backup do banco*) |
 | `monitor-banco`, `monitor-servidor` | Exportadores de métricas do MariaDB e da VPS |
 
 Primeira instalação na VPS (com Docker instalado):
@@ -154,6 +155,34 @@ docker compose up -d
 ```
 
 Depois disso as atualizações da API são feitas pelo CD, que executa `deploy/atualizar.sh` na VPS.
+
+## Backup do banco
+
+O container `backup` faz o backup dos bancos `projeto_producao` e `projeto_homologacao` assim que sobe e depois todo dia às 03:00 (horário de Brasília). Cada banco vira um arquivo compactado em `deploy/backups/`, por exemplo `projeto_producao_2026-10-29_0300.sql.gz`, e os arquivos com mais de 7 dias são apagados. O horário e o prazo ficam em `HORA_BACKUP` e `DIAS_RETENCAO` no `docker-compose.yml`.
+
+Ver os backups e o resultado da última execução (na VPS, pasta `deploy`):
+
+```
+ls -lh backups
+docker compose logs --tail 10 backup
+```
+
+Fazer um backup na hora: `docker compose restart backup`.
+
+Copiar um backup para o computador (PowerShell):
+
+```
+scp -i pronte-vps_key.pem pronte@20.151.6.104:Projeto-API/deploy/backups/<arquivo>.sql.gz .
+```
+
+Restaurar um backup (substitui o banco atual pelo conteúdo do arquivo):
+
+```
+gunzip -c backups/<arquivo>.sql.gz | docker compose exec -T banco sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD"'
+docker compose restart api-producao
+```
+
+Para restaurar a homologação, use um arquivo `projeto_homologacao_...` e reinicie `api-homologacao`.
 
 # Funcionalidades
 - CRUD completo de Clientes
