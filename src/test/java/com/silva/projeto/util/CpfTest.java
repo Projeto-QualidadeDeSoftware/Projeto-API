@@ -16,9 +16,40 @@ class CpfTest {
     }
 
     @Test
+    void validarAceitaCpfValidoComOuSemMascara() {
+        assertThat(Cpf.validar("529.982.247-25")).isEqualTo("52998224725");
+        assertThat(Cpf.validar("98765432100")).isEqualTo("98765432100");
+        assertThat(Cpf.validar("111.222.333-96")).isEqualTo("11122233396");
+    }
+
+    @Test
     void validarRecusaQuantidadeErradaDeDigitos() {
-        assertThat(Cpf.validar("123.456.789-01")).isEqualTo("12345678901");
-        assertThatThrownBy(() -> Cpf.validar("123")).isInstanceOf(DadoInvalidoException.class);
+        assertThatThrownBy(() -> Cpf.validar("123"))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF deve ter 11 dígitos");
+        assertThatThrownBy(() -> Cpf.validar(null))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF deve ter 11 dígitos");
+    }
+
+    @Test
+    void validarRecusaDigitosVerificadoresErrados() {
+        assertThatThrownBy(() -> Cpf.validar("123.456.789-01"))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF inválido");
+        assertThatThrownBy(() -> Cpf.validar("52998224724"))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF inválido");
+    }
+
+    @Test
+    void validarRecusaCpfComTodosOsDigitosIguais() {
+        assertThatThrownBy(() -> Cpf.validar("111.111.111-11"))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF inválido");
+        assertThatThrownBy(() -> Cpf.validar("00000000000"))
+                .isInstanceOf(DadoInvalidoException.class)
+                .hasMessage("CPF inválido");
     }
 
     @Test

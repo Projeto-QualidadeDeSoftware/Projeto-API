@@ -6,4 +6,8 @@ import com.silva.projeto.model.entity.Venda;
 
 public interface VendaRepository extends JpaRepository<Venda, Long> {
 
+    boolean existsByClienteId(Long clienteId);
+
+    boolean existsByFuncionarioId(Long funcionarioId);
+
 }
