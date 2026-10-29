@@ -6,8 +6,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.silva.projeto.exception.ConflitoException;
+import com.silva.projeto.exception.RecursoNaoEncontradoException;
 import com.silva.projeto.model.entity.Funcionario;
 import com.silva.projeto.repository.FuncionarioRepository;
+import com.silva.projeto.repository.VendaRepository;
 import com.silva.projeto.util.Cpf;
 import com.silva.projeto.model.dto.FuncionarioDTO;
 
@@ -16,13 +18,16 @@ public class FuncionarioService {
 
     private final FuncionarioRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final VendaRepository vendaRepository;
 
     public FuncionarioService(
             FuncionarioRepository repository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            VendaRepository vendaRepository) {
 
         this.repository = repository;
         this.passwordEncoder = passwordEncoder;
+        this.vendaRepository = vendaRepository;
     }
 
     public List<Funcionario> listarTodos() {
@@ -31,7 +36,7 @@ public class FuncionarioService {
 
     public Funcionario buscarPorId(Long id) {
         return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Funcionário não encontrado"));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Funcionário não encontrado"));
     }
 
     public Funcionario salvar(Funcionario funcionario) {
@@ -69,7 +74,15 @@ public class FuncionarioService {
     }
 
     public void deletar(Long id) {
-        repository.deleteById(id);
+
+        Funcionario funcionario = buscarPorId(id);
+
+        if (vendaRepository.existsByFuncionarioId(id)) {
+            throw new ConflitoException(
+                    "Não é possível excluir o funcionário porque ele tem vendas registradas");
+        }
+
+        repository.delete(funcionario);
     }
     
     public FuncionarioDTO converterParaDTO(Funcionario funcionario) {
