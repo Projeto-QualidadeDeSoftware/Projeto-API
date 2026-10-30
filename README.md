@@ -73,7 +73,7 @@ esses valores vêm de variáveis de ambiente).
 | `JWT_SECRET` | Chave que assina os tokens de login (mínimo 32 caracteres) | chave de desenvolvimento |
 | `JWT_EXPIRACAO_MINUTOS` | Validade do token | `480` (8 horas) |
 | `ADMIN_CPF`, `ADMIN_SENHA` | Usuário criado quando não existe nenhum funcionário | `00000000000` / `admin123` |
-| `CORS_ORIGENS` | Endereços do front web autorizados, separados por vírgula | `localhost:5173`, `:3000` e `:8081` |
+| `CORS_ORIGENS` | Endereços dos fronts (web e mobile na versão web) autorizados, separados por vírgula | `localhost:5173`, `:3000` e `:8081` |
 | `MISTRAL_API_KEY` | Chave da Mistral para o assistente de IA | vazio (assistente responde 503) |
 | `MISTRAL_MODELO` | Modelo usado | `ministral-8b-2512` |
 | `LOG_ARQUIVO` | Arquivo de log | `logs/projeto.log` |
@@ -136,7 +136,7 @@ Tudo roda em containers Docker numa VPS, descritos em `deploy/docker-compose.yml
 
 | Container | Função |
 | --- | --- |
-| `proxy` | Caddy: entrada pela internet com HTTPS automático; serve o front web de produção (`deploy/web`) e o de homologação (`deploy/web-homologacao`), publicados pelo CD do Projeto-FrontWeb |
+| `proxy` | Caddy: entrada pela internet com HTTPS automático; serve o front web de produção (`deploy/web`) e o de homologação (`deploy/web-homologacao`), publicados pelo CD do Projeto-FrontWeb, e a versão web do mobile (`deploy/mobile` e `deploy/mobile-homologacao`), publicada pelo CD do Projeto-FrontMobile |
 | `api-homologacao` | API no ambiente de homologação (banco `projeto_homologacao`) |
 | `api-producao` | API no ambiente de produção (banco `projeto_producao`) |
 | `banco` | MariaDB com auditoria; cada ambiente tem banco e usuário próprios |
