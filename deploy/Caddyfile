@@ -28,3 +28,15 @@
 	try_files {path} /index.html
 	file_server
 }
+
+{$DOMINIO_MOBILE} {
+	root * /srv/mobile
+	try_files {path} /index.html
+	file_server
+}
+
+{$DOMINIO_MOBILE_HOMOLOGACAO} {
+	root * /srv/mobile-homologacao
+	try_files {path} /index.html
+	file_server
+}
