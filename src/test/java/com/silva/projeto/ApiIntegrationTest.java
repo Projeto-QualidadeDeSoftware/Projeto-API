@@ -274,6 +274,72 @@ class ApiIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void consultarEAlterarCadastrosPeloId() throws Exception {
+        String token = entrar("00000000000", "admin123");
+
+        int clienteId = idDe(mvc.perform(json(post("/cliente"),
+                "{\"nome\":\"Rita\",\"cpf\":\"24681357928\",\"email\":\"rita@email.com\","
+                + "\"telefone\":\"18999999999\"}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        mvc.perform(get("/cliente").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.nome == 'Rita')]").isNotEmpty());
+
+        mvc.perform(get("/cliente/" + clienteId).header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cpf").value("24681357928"))
+                .andExpect(jsonPath("$.email").value("rita@email.com"));
+
+        int funcionarioId = idDe(mvc.perform(json(post("/funcionario"),
+                "{\"nome\":\"Davi\",\"cpf\":\"369.258.147-55\",\"cargo\":\"Estoquista\","
+                + "\"senha\":\"segredo5\",\"salario\":1900.00}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        mvc.perform(json(put("/funcionario/" + funcionarioId),
+                "{\"nome\":\"Davi Lima\",\"cpf\":\"36925814755\",\"cargo\":\"Repositor\","
+                + "\"senha\":\"segredo6\",\"salario\":2100.00}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.senha").doesNotExist());
+
+        mvc.perform(get("/funcionario/" + funcionarioId).header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Davi Lima"))
+                .andExpect(jsonPath("$.cargo").value("Repositor"))
+                .andExpect(jsonPath("$.salario").value(2100.0));
+
+        mvc.perform(get("/funcionario/" + funcionarioId + "/vendas").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        // A senha nova passa a valer no login.
+        assertThat(entrar("36925814755", "segredo6")).startsWith("Bearer ");
+
+        int produtoId = idDe(mvc.perform(json(post("/produto"),
+                "{\"nome\":\"Suco\",\"descricao\":\"Suco de uva 1L\",\"preco\":9.0,"
+                + "\"estoque\":12}").header("Authorization", token))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+
+        mvc.perform(json(put("/produto/" + produtoId),
+                "{\"nome\":\"Suco Integral\",\"descricao\":\"Suco de uva integral 1L\",\"preco\":11.0,"
+                + "\"estoque\":15}").header("Authorization", token))
+                .andExpect(status().isOk());
+
+        mvc.perform(get("/produto/" + produtoId).header("Authorization", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nome").value("Suco Integral"))
+                .andExpect(jsonPath("$.preco").value(11.0))
+                .andExpect(jsonPath("$.estoque").value(15));
+
+        mvc.perform(get("/funcionario/999999").header("Authorization", token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.mensagem").value("Funcionário não encontrado"));
+    }
+
     // ---------- venda e estoque ----------
 
     @Test

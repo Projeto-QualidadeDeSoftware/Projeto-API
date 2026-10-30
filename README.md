@@ -122,7 +122,7 @@ clique em **Authorize** e cole o token.
 Executa os testes unitários (JUnit 5 + Mockito) e os testes de integração da API
 (MockMvc com banco H2 em memória, sem precisar de MySQL nem da Mistral), gera o
 relatório de cobertura em `target/site/jacoco/index.html` e falha se a cobertura
-de linhas ficar abaixo de 60%.
+de linhas ficar abaixo de 90%.
 
 # CI/CD
 
